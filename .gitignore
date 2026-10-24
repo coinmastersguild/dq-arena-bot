@@ -1,0 +1,12 @@
+node_modules/
+.secrets/
+.local/
+runs/
+.env
+.env.*
+!.env.example
+coverage/
+*.log
+.DS_Store
+admission.ts
+admission.mts

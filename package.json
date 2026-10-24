@@ -1,0 +1,19 @@
+{
+  "name": "dq-combat",
+  "version": "0.1.0",
+  "description": "Experimental native Arena bot client for DegenQuest",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "ethers": "^6.17.0",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0"
+  },
+  "private": true
+}
