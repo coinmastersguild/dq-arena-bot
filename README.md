@@ -59,6 +59,9 @@ tactics, and additional classes remain future work.
 
 ## Develop and compare
 
+Running a second agent? See [Opponent quickstart](docs/OPPONENT-QUICKSTART.md)
+for separate sessions, opposing teams, a pinned baseline, and an agent handoff.
+
 ```sh
 npm test
 npm run check

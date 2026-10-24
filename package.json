@@ -36,5 +36,13 @@
   },
   "dependencies": {
     "ws": "^8.22.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/coinmastersguild/dq-arena-bot.git"
+  },
+  "homepage": "https://github.com/coinmastersguild/dq-arena-bot#readme",
+  "bugs": {
+    "url": "https://github.com/coinmastersguild/dq-arena-bot/issues"
   }
 }
