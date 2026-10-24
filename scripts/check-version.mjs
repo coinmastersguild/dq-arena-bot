@@ -1,0 +1,10 @@
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import {CONTROLLER_VERSION} from '../src/controller.mjs';
+const pkg = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url)));
+const lock = JSON.parse(fs.readFileSync(new URL('../package-lock.json', import.meta.url)));
+assert.equal(pkg.version, CONTROLLER_VERSION);
+assert.equal(lock.version, pkg.version);
+assert.equal(lock.packages[''].version, pkg.version);
+assert.ok(fs.readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8').includes(`## ${pkg.version}`));
+console.log(`Version metadata consistent: ${pkg.version}`);

@@ -10,3 +10,5 @@ coverage/
 .DS_Store
 admission.ts
 admission.mts
+bot.config.json
+*.tgz

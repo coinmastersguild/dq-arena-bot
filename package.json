@@ -1,19 +1,40 @@
 {
-  "name": "dq-combat",
-  "version": "0.1.0",
-  "description": "Experimental native Arena bot client for DegenQuest",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+  "name": "dq-arena-bot",
+  "version": "0.2.0",
+  "private": true,
+  "description": "Experimental native DegenQuest Arena bot toolkit with offline tests and versioned recordings",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
   },
-  "keywords": [],
-  "author": "",
   "license": "ISC",
-  "type": "commonjs",
-  "dependencies": {
-    "ethers": "^6.17.0",
-    "tsx": "^4.23.15",
-    "ws": "^8.22.0"
+  "bin": {
+    "dq-arena-bot": "bin/arena.mjs"
   },
-  "private": true
+  "exports": {
+    ".": "./src/controller.mjs",
+    "./navigation": "./src/navigation.mjs"
+  },
+  "files": [
+    "src/",
+    "bin/",
+    "scripts/",
+    "docs/",
+    "bot.config.example.json",
+    "README.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node bin/arena.mjs start",
+    "bot": "node bin/arena.mjs",
+    "test": "node --test test/*.test.mjs",
+    "check": "node scripts/check-version.mjs",
+    "replay": "node scripts/replay.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.22.0"
+  }
 }

@@ -1,0 +1,92 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {CombatController} from '../src/controller.mjs';
+
+function harness() {
+  const sent = [], diagnostics = [];
+  const bot = new CombatController({send: m => sent.push(m), onDiagnostic: d => diagnostics.push(d)});
+  bot.setRules({version: 'native-arena-v1', tickHz: 20, specs: [{id: 'frost_mage', abilities: [
+    {id: 'frostbolt', cost: 62, castTime: 2.2}, {id: 'ice_barrier', cost: 90, castTime: 0},
+  ]}]});
+  bot.observe({t: 'welcome', state: 'countdown', pid: 1, side: 'freehold'});
+  const snap = (tick, overrides = {}) => ({t: 'snap', state: 'fight', tick, full: 1,
+    ents: [{id: 1, x: 0, z: 0, f: 0, hp: 400, mhp: 400}, {id: 2, x: 0, z: 25, hp: 400, mhp: 400}],
+    chars: {1: {side: 'freehold'}, 2: {side: 'coinfall'}}, self: {id: 1, res: 1000, known: ['frostbolt', 'ice_barrier'], gcd: 0, cds: {}}, ...overrides});
+  return {bot, sent, diagnostics, snap};
+}
+test('entity rows replace absent fields, full snapshots replace maps, gone removes entries', () => {
+  const {bot, snap} = harness();
+  bot.observe(snap(1, {state: 'countdown', ents: [{id: 1, cast: 'old'}]}));
+  bot.observe(snap(2, {state: 'countdown', full: 0, ents: [{id: 1, hp: 10}]}));
+  assert.equal(bot.entities.get(1).cast, undefined);
+  bot.observe(snap(3, {state: 'countdown', ents: [{id: 2}]})); assert.equal(bot.entities.has(1), false);
+  bot.observe(snap(4, {state: 'countdown', full: 0, ents: [], gone: [2]})); assert.equal(bot.entities.size, 0);
+});
+test('snapshot phase triggers combat and a legal target/cast without requiring battle message', () => {
+  const {bot, sent, snap} = harness(); bot.observe(snap(201));
+  assert.ok(sent.some(m => m.cmd === 'target' && m.id === 2));
+  assert.ok(sent.some(m => m.cmd === 'cast' && m.ability === 'frostbolt'));
+});
+test('no combat actions in lobby, countdown, results, or spectator mode', () => {
+  for (const state of ['lobby', 'countdown', 'results']) {
+    const {bot, sent, snap} = harness(); bot.observe(snap(1, {state})); assert.equal(sent.length, 0);
+  }
+  const {bot, sent, snap} = harness(); bot.spectator = true; bot.observe(snap(1)); assert.equal(sent.length, 0);
+});
+test('team focus happens outside personal spell range', () => {
+  const {bot, sent, snap} = harness(); bot.leader = true;
+  const m = snap(201); m.ents[1].z = 100; bot.observe(m);
+  assert.ok(sent.some(m => m.cmd === 'coach' && m.order === 'focus'));
+  assert.ok(!sent.some(m => m.cmd === 'cast'));
+});
+test('embedded actor-scoped LOS errors start recovery and suppress immediate repeat casts', () => {
+  const {bot, sent, diagnostics, snap} = harness(); bot.nav.offset = 0; bot.observe(snap(201)); sent.length = 0;
+  bot.observe(snap(225, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  assert.ok(diagnostics.some(d => d.type === 'navigation-recovery'));
+  assert.ok(!sent.some(m => m.cmd === 'cast'));
+  assert.ok(sent.some(m => m.t === 'input' && m.mi.f === 1));
+});
+test('foreign errors do not change this player LOS state', () => {
+  const {bot, snap} = harness(); bot.observe(snap(201));
+  bot.observe(snap(225, {evs: [{type: 'error', pid: 2, text: 'Line of sight.'}]}));
+  assert.equal(bot.losUntil.size, 0);
+});
+test('cast gating respects learned abilities, mana, GCD, cooldown and pending casts', () => {
+  for (const override of [{known: []}, {res: 0}, {gcd: 1}, {cds: {frostbolt: 3}}]) {
+    const {bot, sent, snap} = harness(); const m = snap(201); Object.assign(m.self, override); bot.observe(m);
+    assert.ok(!sent.some(m => m.cmd === 'cast'));
+  }
+  const {bot, sent, snap} = harness(); bot.observe(snap(201)); bot.observe(snap(225));
+  assert.equal(sent.filter(m => m.cmd === 'cast').length, 1);
+});
+test('results stop previously issued movement', () => {
+  const {bot, sent} = harness(); bot.input(1, 1); bot.observe({t: 'battle', state: 'results'});
+  assert.equal(sent.at(-1).mi.f, 0);
+});
+test('embedded cast and damage outcomes are observed; prolonged inactivity raises diagnostics', () => {
+  const {bot, diagnostics, snap} = harness(); bot.observe(snap(201));
+  bot.observe(snap(205, {evs: [{type: 'damage', sourceId: 1, amount: 80}]})); assert.equal(bot.lastEffect, 205);
+  bot.observe(snap(509)); assert.ok(diagnostics.some(d => d.type === 'no-combat-effect'));
+});
+test('root pauses navigation without treating it as a collision', () => {
+  const {bot, sent, snap} = harness(); const m = snap(201); m.ents[1].z = 100;
+  m.ents[0].auras = [{kind: 'root', end: 400}]; bot.observe(m);
+  assert.ok(!sent.some(m => m.mi?.f === 1)); assert.equal(bot.nav.attempts, 0);
+});
+test('synthetic obstacle: recovery reaches casting range instead of repeating a blocked heading', () => {
+  const {bot, sent, diagnostics, snap} = harness();
+  let x = 0, z = 0, input = {facing: 0, mi: {f: 0}};
+  for (let tick = 201; tick < 801; tick += 4) {
+    const m = snap(tick); m.ents[0].x = x; m.ents[0].z = z; m.ents[1].z = 45;
+    const before = sent.length; bot.observe(m);
+    for (const command of sent.slice(before)) if (command.t === 'input') input = command;
+    const nx = x + Math.sin(input.facing) * input.mi.f * 1.4;
+    const nz = z + Math.cos(input.facing) * input.mi.f * 1.4;
+    // Deliberately simple synthetic wall; this is not the Arena collision model.
+    if (!(Math.abs(nx) <= 2 && nz >= 4 && nz <= 7)) { x = nx; z = nz; }
+    if (sent.some(command => command.cmd === 'cast')) break;
+  }
+  assert.ok(diagnostics.some(d => d.type === 'navigation-recovery'));
+  assert.ok(sent.some(command => command.cmd === 'cast' && command.ability === 'frostbolt'));
+  assert.ok(Math.hypot(x, 45 - z) <= 30);
+});

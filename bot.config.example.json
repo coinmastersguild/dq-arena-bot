@@ -1,0 +1,11 @@
+{
+  "origin": "https://degenquest.ai",
+  "spec": "frost_mage",
+  "character": "high-elf-male",
+  "side": "freehold",
+  "cookieFile": ".secrets/cookies.txt",
+  "stateDirectory": ".secrets/bot",
+  "runsDirectory": "runs",
+  "maxSessionMinutes": 30,
+  "maxReconnects": 3
+}
