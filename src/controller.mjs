@@ -1,7 +1,7 @@
 import {Navigator} from './navigation.mjs';
 import {TargetSelector} from './targeting.mjs';
 
-export const CONTROLLER_VERSION = '0.4.0';
+export const CONTROLLER_VERSION = '0.5.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -92,6 +92,10 @@ export class CombatController {
       if (!own) continue;
       if (e.type === 'error') {
         this.diagnostic({type: 'combat-error', tick: this.tick, text: e.text});
+        if (/no target/i.test(e.text || '') && !living(this.entities.get(this.targetId))) {
+          this.diagnostic({type: 'target-lost-during-cast', tick: this.tick, targetId: this.targetId});
+          this.lastTargetSent = null; this.lastTargetTick = -Infinity;
+        }
         if (/line of sight/i.test(e.text || '') && this.targetId != null) {
           const targetId = this.pendingCast?.target ?? this.targetId;
           const count = (this.losFailures.get(targetId)?.count || 0) + 1;
@@ -178,6 +182,14 @@ export class CombatController {
     }
     if (near && this.cast('frost_nova')) { this.stopMovement(me.f); return; }
     const los = this.losUntil.get(target.id) > this.tick;
+    const failed = this.losFailures.get(target.id);
+    const repositioned = failed && ((failed.origin && distance(me, failed.origin) >= 4) ||
+      (failed.targetOrigin && distance(target, failed.targetOrigin) >= 6));
+    if (los && repositioned && range >= 12 && range <= 30 && !this.nav.recovery) {
+      // The new position is sufficient; wait out the backoff instead of exhausting
+      // escape attempts or walking into melee while unable to cast this target.
+      this.stopMovement(facing); return;
+    }
     if (!rooted && (range > 27 || range < 12 || los || this.nav.recovery)) {
       const step = this.nav.plan(me, target, this.tick, {retreat: range < 12, lineOfSight: los});
       this.input(step.facing, step.forward); return;

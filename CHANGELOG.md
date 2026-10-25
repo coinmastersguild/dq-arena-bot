@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.5.0 — 2026-10-25
+
+Tournament round-two candidate.
+
+- Trigger LOS sidesteps once per server error rather than repeatedly during backoff.
+- Hold safe casting range after sufficient repositioning while waiting for a retry.
+- Diagnose targets lost during casts separately and reset target-send tracking.
+- Add regressions for false escape exhaustion and backoff movement.
+
 ## 0.4.0 — 2026-10-25
 
 Tournament round-one candidate; 32 offline tests pass.

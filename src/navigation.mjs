@@ -37,7 +37,7 @@ export class Navigator {
     this.anchor = null;
     this.onDiagnostic({type: 'navigation-recovery', tick, reason, attempt: this.attempts});
   }
-  plan(me, target, tick, {retreat = false, lineOfSight = false} = {}) {
+  plan(me, target, tick, {retreat = false} = {}) {
     if (this.blocked) return {facing: me.f || 0, forward: 0};
     if (this.offset === null) {
       if (!this.probe) this.probe = {...me, tick, facing: this.attempts * Math.PI / 2};
@@ -68,7 +68,8 @@ export class Navigator {
       this.recovery = null;
       this.anchor = {...me, tick};
     }
-    if (lineOfSight) this.escape(tick, heading, 'line-of-sight');
+    // LOS recovery is triggered once by a server error, not every cooldown frame.
+    // Repeating it here consumed all escape attempts even while moving freely.
     if (this.anchor && tick - this.anchor.tick >= this.tickHz * 1.5) this.escape(tick, heading, 'no displacement');
     if (this.blocked) { this.moving = false; return {facing: me.f || 0, forward: 0}; }
     this.moving = true;

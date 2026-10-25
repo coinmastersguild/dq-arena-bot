@@ -106,3 +106,12 @@ test('repeated LOS failures increase backoff and confirmed damage clears it', ()
   bot.observe(snap(229, {evs: [{type: 'damage', sourceId: 1, targetId: 2, amount: 70}]}));
   assert.equal(bot.losUntil.has(2), false); assert.equal(bot.losFailures.has(2), false);
 });
+test('after LOS reposition, hold safe casting range until backoff expires', () => {
+  const {bot, sent, snap} = harness(); bot.nav.offset = 0; bot.observe(snap(201));
+  bot.observe(snap(205, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  // Simulate the completed sidestep without forging a successful spell.
+  bot.nav.recovery = null; bot.lastInputMoving = true; sent.length = 0;
+  const moved = snap(241); moved.ents[0].x = 5; bot.observe(moved);
+  assert.ok(!sent.some(m => m.mi?.f === 1));
+  assert.ok(!sent.some(m => m.cmd === 'cast'));
+});

@@ -29,3 +29,9 @@ test('pauses do not accrue blocked movement time', () => {
   nav.plan({x: 0, z: 0}, {x: 0, z: 100}, 200);
   assert.equal(nav.attempts, 0);
 });
+test('LOS cooldown frames do not consume escape attempts while making progress', () => {
+  const nav = new Navigator(); nav.offset = 0;
+  nav.escape(0, 0, 'line-of-sight');
+  for (let tick = 0; tick < 200; tick += 4) nav.plan({x: tick / 4, z: 0}, {x: 100, z: 50}, tick, {lineOfSight: true});
+  assert.equal(nav.blocked, false); assert.equal(nav.attempts, 0);
+});
