@@ -115,3 +115,20 @@ test('after LOS reposition, hold safe casting range until backoff expires', () =
   assert.ok(!sent.some(m => m.mi?.f === 1));
   assert.ok(!sent.some(m => m.cmd === 'cast'));
 });
+test('use a learned in-range instant spell while retreating, without starting a timed cast', () => {
+  const {bot, sent, snap} = harness(); bot.nav.offset = 0;
+  bot.abilities.set('fire_blast', {cost: 85, castTime: 0, range: 20});
+  const m = snap(201); m.ents[1].z = 8; m.self.known = ['fire_blast', 'frostbolt']; bot.observe(m);
+  assert.ok(sent.some(m => m.mi?.b === 1 && m.mi.f === 0 && Math.abs(m.facing) < 0.01));
+  assert.ok(sent.some(m => m.cmd === 'cast' && m.ability === 'fire_blast'));
+  assert.ok(!sent.some(m => m.cmd === 'cast' && m.ability === 'frostbolt'));
+});
+test('movement spell still respects LOS and its runtime range', () => {
+  for (const reason of ['los', 'range']) {
+    const {bot, sent, snap} = harness(); bot.nav.offset = 0;
+    bot.abilities.set('fire_blast', {cost: 85, castTime: 0, range: reason === 'range' ? 5 : 20});
+    if (reason === 'los') bot.losUntil.set(2, 500);
+    const m = snap(201);m.ents[1].z = 8;m.self.known = ['fire_blast'];bot.observe(m);
+    assert.ok(!sent.some(m => m.cmd === 'cast'));
+  }
+});

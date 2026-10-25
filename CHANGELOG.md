@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.0 — 2026-10-25
+
+Tournament round-four candidate.
+
+- Use learned Fire Blast while moving within its runtime range, subject to LOS, mana, cooldown, GCD, and pending-cast checks.
+- Backpedal while facing the target for retreat casts; keep timed casts out of the movement branch.
+- Add regressions for instant damage during retreat and LOS/range rejection.
+
 ## 0.6.0 — 2026-10-25
 
 Tournament round-three candidate.

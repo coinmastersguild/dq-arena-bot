@@ -1,7 +1,7 @@
 import {Navigator} from './navigation.mjs';
 import {TargetSelector} from './targeting.mjs';
 
-export const CONTROLLER_VERSION = '0.6.0';
+export const CONTROLLER_VERSION = '0.7.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -118,10 +118,10 @@ export class CombatController {
       }
     }
   }
-  input(facing, forward = 0) {
+  input(facing, forward = 0, backward = 0) {
     if (!Number.isFinite(facing)) return;
-    this.lastInputMoving = !!forward;
-    this.send({t: 'input', seq: ++this.seq, facing, mi: {f: forward, b: 0, sl: 0, sr: 0, j: 0}});
+    this.lastInputMoving = !!(forward || backward);
+    this.send({t: 'input', seq: ++this.seq, facing, mi: {f: forward, b: backward, sl: 0, sr: 0, j: 0}});
   }
   stopMovement(facing = 0) {
     if (this.lastInputMoving) this.input(facing, 0);
@@ -192,7 +192,14 @@ export class CombatController {
     }
     if (!rooted && (range > 27 || range < 12 || los || this.nav.recovery)) {
       const step = this.nav.plan(me, target, this.tick, {retreat: range < 12, lineOfSight: los});
-      this.input(step.facing, step.forward); return;
+      const backpedal = step.forward && range < 12 && !this.nav.recovery && this.nav.offset !== null;
+      const movementFacing = backpedal ? step.facing - Math.PI : step.facing;
+      this.input(movementFacing, backpedal ? 0 : step.forward, backpedal ? 1 : 0);
+      // Instant damage can use movement time; never attempt a timed cast here.
+      const instant = this.abilities.get('fire_blast');
+      const facingTarget = Math.cos(movementFacing - facing) > 0.9;
+      if (step.forward && facingTarget && !los && instant?.castTime === 0 && range <= instant.range) this.cast('fire_blast', target.id);
+      return;
     }
     this.stopMovement(facing);
     this.input(facing, 0);
