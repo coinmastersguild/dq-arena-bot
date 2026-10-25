@@ -1,7 +1,7 @@
 # DQ Arena Bot
 
 An experimental JavaScript toolkit for native DegenQuest Arena bots. Version
-**0.7.0** supplies a frost-mage controller, a session/WebSocket runner, offline
+**0.8.0** supplies a frost-mage controller, a session/WebSocket runner, offline
 regression tests, and versioned recordings. This is an unofficial client,
 not the game server or the separate MAD team-coach API.
 
@@ -37,9 +37,13 @@ npm run bot -- unready --config bot.config.json
 npm run bot -- stop --config bot.config.json
 ```
 
-Joining does not ready. `npm start -- --config bot.config.json --ready` explicitly
-readies the initial connection after side selection. Reconnect never auto-readies.
+In default manual mode, joining does not ready. `npm start -- --config bot.config.json --ready`
+readies the initial connection after side selection. Manual reconnect never auto-readies.
 Check server status: queueing a command is not acknowledgement. Keep the process running.
+
+For supervised continuous play with five-minute intermissions and bounded GLM
+strategy reviews through Alpha, see [Autonomy](docs/AUTONOMY.md). This mode is opt-in,
+uses separate code/policy versions, and continues with the current policy if inference fails.
 
 ## Controller behavior
 

@@ -1,13 +1,14 @@
 import {Navigator} from './navigation.mjs';
 import {TargetSelector} from './targeting.mjs';
+import {DEFAULT_POLICY, validatePolicy} from './policy.mjs';
 
-export const CONTROLLER_VERSION = '0.7.0';
+export const CONTROLLER_VERSION = '0.8.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
 /** Pure protocol/controller core: injected sends, no sockets, wallet, or filesystem. */
 export class CombatController {
-  constructor({send, onDiagnostic = () => {}, spec = 'frost_mage', tickHz = 20} = {}) {
+  constructor({send, onDiagnostic = () => {}, spec = 'frost_mage', tickHz = 20, policy = DEFAULT_POLICY} = {}) {
     if (spec !== 'frost_mage') throw new Error('Only frost_mage strategy is implemented');
     this.send = send;
     this.diagnostic = onDiagnostic;
@@ -18,6 +19,11 @@ export class CombatController {
     this.targeting = new TargetSelector({tickHz, onDiagnostic});
     this.seq = 0;
     this.reset();
+    this.setPolicy(policy);
+  }
+  setPolicy(policy) {
+    if (!['lobby', 'results'].includes(this.phase)) throw new Error('Policy changes require an intermission');
+    this.policy = validatePolicy(policy); this.targeting.policy = this.policy;
   }
   reset() {
     this.entities = new Map(); this.chars = {}; this.self = {};
@@ -100,11 +106,11 @@ export class CombatController {
           const targetId = this.pendingCast?.target ?? this.targetId;
           const count = (this.losFailures.get(targetId)?.count || 0) + 1;
           const me = this.entities.get(id), target = this.entities.get(targetId);
-          const until = this.tick + this.tickHz * Math.min(24, 8 * count);
+          const until = this.tick + this.tickHz * Math.min(24, this.policy.losBackoffSeconds * count);
           this.losFailures.set(targetId, {count, until, origin: me && {x: me.x, z: me.z},
             targetOrigin: target && {x: target.x, z: target.z}});
           this.losUntil.set(targetId, until);
-          this.diagnostic({type: 'los-backoff', tick: this.tick, targetId, seconds: Math.min(24, 8 * count)});
+          this.diagnostic({type: 'los-backoff', tick: this.tick, targetId, seconds: Math.min(24, this.policy.losBackoffSeconds * count)});
           this.nav.escape(this.tick, this.entities.get(id)?.f || 0, 'line-of-sight');
         }
         this.pendingCast = null;
@@ -177,7 +183,7 @@ export class CombatController {
     const range = distance(me, target);
     const near = enemies.some(e => distance(me, e) < 10);
     const facing = this.nav.offset === null ? me.f || 0 : Math.atan2(target.x - me.x, target.z - me.z) - this.nav.offset;
-    if ((near || me.hp < me.mhp * 0.7) && !active.some(a => a.kind === 'absorb') && this.cast('ice_barrier')) {
+    if ((near || me.hp < me.mhp * this.policy.shieldHealth) && !active.some(a => a.kind === 'absorb') && this.cast('ice_barrier')) {
       this.stopMovement(me.f); return;
     }
     if (near && this.cast('frost_nova')) { this.stopMovement(me.f); return; }
@@ -185,14 +191,14 @@ export class CombatController {
     const failed = this.losFailures.get(target.id);
     const repositioned = failed && ((failed.origin && distance(me, failed.origin) >= 4) ||
       (failed.targetOrigin && distance(target, failed.targetOrigin) >= 6));
-    if (los && repositioned && range >= 12 && range <= 30 && !this.nav.recovery) {
+    if (los && repositioned && range >= this.policy.retreatRange && range <= 30 && !this.nav.recovery) {
       // The new position is sufficient; wait out the backoff instead of exhausting
       // escape attempts or walking into melee while unable to cast this target.
       this.stopMovement(facing); return;
     }
-    if (!rooted && (range > 27 || range < 12 || los || this.nav.recovery)) {
-      const step = this.nav.plan(me, target, this.tick, {retreat: range < 12, lineOfSight: los});
-      const backpedal = step.forward && range < 12 && !this.nav.recovery && this.nav.offset !== null;
+    if (!rooted && (range > this.policy.preferredRange || range < this.policy.retreatRange || los || this.nav.recovery)) {
+      const step = this.nav.plan(me, target, this.tick, {retreat: range < this.policy.retreatRange, lineOfSight: los});
+      const backpedal = step.forward && range < this.policy.retreatRange && !this.nav.recovery && this.nav.offset !== null;
       const movementFacing = backpedal ? step.facing - Math.PI : step.facing;
       this.input(movementFacing, backpedal ? 0 : step.forward, backpedal ? 1 : 0);
       // Instant damage can use movement time; never attempt a timed cast here.

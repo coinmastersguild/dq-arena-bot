@@ -1,6 +1,6 @@
 {
   "name": "dq-arena-bot",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "private": true,
   "description": "Experimental native DegenQuest Arena bot toolkit with offline tests and versioned recordings",
   "type": "module",
@@ -33,7 +33,9 @@
     "test": "node --test test/*.test.mjs",
     "check": "node scripts/check-version.mjs",
     "replay": "node scripts/replay.mjs",
-    "tournament": "node scripts/tournament.mjs"
+    "tournament": "node scripts/tournament.mjs",
+    "service": "node bin/service.mjs",
+    "service:plist": "node scripts/service-plist.mjs"
   },
   "dependencies": {
     "ws": "^8.22.0"

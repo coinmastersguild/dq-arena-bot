@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.8.0
+
+- Opt-in continuous service with reconnect backoff, socket watchdog, durable pause/stop,
+  process supervision support and automatic lobby readiness after five-minute intermissions.
+- Alpha GLM review of numerical round summaries, with persistent daily usage reservations,
+  bounded strategy proposals, behavioral validation, intermission-only policy activation and
+  a severe-failure rollback rule. No generated code execution or automatic credit purchase.
+- Separate policy versions, immutable round results, result-time report matching, per-round
+  recording rotation and retention for continuous runs.
+
 ## 0.7.0 — 2026-10-25
 
 Tournament round-four candidate.
