@@ -1,7 +1,7 @@
 import {Navigator} from './navigation.mjs';
 import {TargetSelector} from './targeting.mjs';
 
-export const CONTROLLER_VERSION = '0.3.0';
+export const CONTROLLER_VERSION = '0.4.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -25,7 +25,7 @@ export class CombatController {
     this.spectator = false; this.leader = false; this.name = null;
     this.lastDecision = -Infinity; this.lastCast = -Infinity; this.lastCoach = -Infinity;
     this.targetId = null; this.pendingCast = null; this.lastTargetSent = null; this.lastTargetTick = -Infinity;
-    this.losUntil = new Map(); this.lastInputMoving = false;
+    this.losUntil = new Map(); this.losFailures = new Map(); this.lastInputMoving = false;
     this.fightStart = null; this.lastEffect = null; this.lastAlert = -Infinity;
     this.nav.reset();
     this.targeting.reset(); this.lastCoachTarget = null;
@@ -93,7 +93,14 @@ export class CombatController {
       if (e.type === 'error') {
         this.diagnostic({type: 'combat-error', tick: this.tick, text: e.text});
         if (/line of sight/i.test(e.text || '') && this.targetId != null) {
-          this.losUntil.set(this.targetId, this.tick + this.tickHz * 3);
+          const targetId = this.pendingCast?.target ?? this.targetId;
+          const count = (this.losFailures.get(targetId)?.count || 0) + 1;
+          const me = this.entities.get(id), target = this.entities.get(targetId);
+          const until = this.tick + this.tickHz * Math.min(24, 8 * count);
+          this.losFailures.set(targetId, {count, until, origin: me && {x: me.x, z: me.z},
+            targetOrigin: target && {x: target.x, z: target.z}});
+          this.losUntil.set(targetId, until);
+          this.diagnostic({type: 'los-backoff', tick: this.tick, targetId, seconds: Math.min(24, 8 * count)});
           this.nav.escape(this.tick, this.entities.get(id)?.f || 0, 'line-of-sight');
         }
         this.pendingCast = null;
@@ -101,6 +108,9 @@ export class CombatController {
       if (['castStart', 'castStop', 'damage', 'heal2'].includes(e.type)) {
         this.lastEffect = this.tick;
         if (e.type !== 'castStart') this.pendingCast = null;
+      }
+      if (e.type === 'damage' && e.sourceId === id && e.targetId != null) {
+        this.losFailures.delete(e.targetId); this.losUntil.delete(e.targetId);
       }
     }
   }
@@ -127,12 +137,20 @@ export class CombatController {
     if (target != null) this.select(target);
     this.send({t: 'cmd', cmd: 'cast', ability: id});
     this.lastCast = this.tick;
-    this.pendingCast = {id, until: this.tick + this.tickHz * Math.max(1, a.castTime || 0)};
+    this.pendingCast = {id, target, until: this.tick + this.tickHz * Math.max(1, a.castTime || 0)};
     return true;
   }
   decide() {
     const me = this.entities.get(this.self.id ?? this.pid);
     if (!living(me)) { this.stopMovement(); return; }
+    for (const [id, failure] of this.losFailures) {
+      if (this.tick < failure.until) continue;
+      const target = this.entities.get(id);
+      const repositioned = (failure.origin && distance(me, failure.origin) >= 4) ||
+        (target && failure.targetOrigin && distance(target, failure.targetOrigin) >= 6);
+      if (repositioned) this.losUntil.delete(id);
+      else this.losUntil.set(id, this.tick + this.tickHz);
+    }
     const active = (me.auras || []).filter(a => a.end > this.tick);
     const controlled = active.some(a => ['stun', 'polymorph', 'fear'].includes(a.kind));
     const rooted = active.some(a => ['root', 'rooted'].includes(a.kind));

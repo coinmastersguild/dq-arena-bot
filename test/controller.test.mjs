@@ -90,3 +90,19 @@ test('synthetic obstacle: recovery reaches casting range instead of repeating a 
   assert.ok(sent.some(command => command.cmd === 'cast' && command.ability === 'frostbolt'));
   assert.ok(Math.hypot(x, 45 - z) <= 30);
 });
+test('LOS retry requires both backoff expiry and meaningful repositioning', () => {
+  const {bot, snap} = harness(); bot.nav.offset = 0; bot.observe(snap(201));
+  bot.observe(snap(205, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  assert.equal(bot.losUntil.get(2), 365);
+  bot.observe(snap(369)); assert.ok(bot.losUntil.get(2) > 369);
+  const moved = snap(373); moved.ents[0].x = 5; bot.observe(moved);
+  assert.equal(bot.losUntil.has(2), false);
+});
+test('repeated LOS failures increase backoff and confirmed damage clears it', () => {
+  const {bot, snap} = harness();bot.observe(snap(201));
+  bot.observe(snap(205, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  bot.observe(snap(225, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  assert.equal(bot.losUntil.get(2), 545);
+  bot.observe(snap(229, {evs: [{type: 'damage', sourceId: 1, targetId: 2, amount: 70}]}));
+  assert.equal(bot.losUntil.has(2), false); assert.equal(bot.losFailures.has(2), false);
+});

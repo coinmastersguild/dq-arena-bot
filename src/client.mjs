@@ -40,6 +40,7 @@ export class ArenaClient {
     } catch { /* An exported source archive need not contain .git. */ }
     this.recorder = new Recorder(this.config.runsDirectory, {controllerVersion: CONTROLLER_VERSION, commit, dirty,
       origin: this.config.origin, spec: this.config.spec, character: this.config.character, side: this.config.side});
+    this.status({runDirectory: this.recorder.directory, startedAt: this.startedAt});
     this.deadline = setTimeout(() => this.stop('session-limit'), this.config.maxSessionMinutes * 60000);
     this.interval(() => this.localCommand(), 200);
     await this.connect();

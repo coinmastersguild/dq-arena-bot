@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.0 — 2026-10-25
+
+Tournament round-one candidate; 32 offline tests pass.
+
+- Increase repeated LOS backoff to 8/16/24 seconds; require meaningful position change before retry.
+- Attribute LOS errors to the pending cast target and clear the block on confirmed damage.
+- Retain an accessible non-tank target instead of chasing an out-of-range priority upgrade.
+- Add regression tests for backoff, movement prerequisites, and sustained accessible focus.
+- Add a durable five-minute tournament gate and deduplicated round ledger.
+
 ## 0.3.0 — 2026-10-24
 
 Rematch candidate; live tactical validation pending.

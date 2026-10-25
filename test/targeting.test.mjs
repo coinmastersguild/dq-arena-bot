@@ -46,3 +46,7 @@ test('avoid controlled targets and targets with recent LOS errors', () => {
   priest.auras = [];
   assert.equal(choose([priest, entity(4, 25)], 205, {losUntil: new Map([[3, 500]])}).id, 4);
 });
+test('retain an accessible caster instead of chasing a slightly out-of-range healer', () => {
+  const {choose, entity} = harness(); choose([entity(4, 25)], 201);
+  assert.equal(choose([entity(4, 25), entity(3, 35)], 401).id, 4);
+});

@@ -42,6 +42,10 @@ export class TargetSelector {
     targets.sort((a, b) => score(a) - score(b) || a.id - b.id);
     let target = targets[0];
     if (previous && target && score(previous) <= score(target) + 12) target = previous;
+    // Keep productive in-range pressure instead of chasing an out-of-range upgrade.
+    if (previous && target && this.role(previous, chars) !== 'bossTank' &&
+        distance(me, previous) <= 30 && distance(me, target) > 30 &&
+        !(losUntil.get(previous.id) > tick) && !(this.avoidUntil.get(previous.id) > tick)) target = previous;
     if (target && target.id !== this.focus?.id) {
       this.focus = {id: target.id, since: tick, hp: target.hp, damage: 0, healing: 0};
       this.diagnostic({type: 'focus-selected', tick, targetId: target.id,
