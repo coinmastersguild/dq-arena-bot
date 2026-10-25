@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.6.0 — 2026-10-25
+
+Tournament round-three candidate.
+
+- Abandon a non-moving escape after 0.6 seconds and try its opposite direction.
+- Allow successful sidesteps two seconds to clear obstacles and remember the successful side for the next obstruction.
+- Keep four-attempt bounds and add navigation regressions.
+
 ## 0.5.0 — 2026-10-25
 
 Tournament round-two candidate.

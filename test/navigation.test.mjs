@@ -35,3 +35,20 @@ test('LOS cooldown frames do not consume escape attempts while making progress',
   for (let tick = 0; tick < 200; tick += 4) nav.plan({x: tick / 4, z: 0}, {x: 100, z: 50}, tick, {lineOfSight: true});
   assert.equal(nav.blocked, false); assert.equal(nav.attempts, 0);
 });
+test('abort an escape that produces no displacement and try the opposite side promptly', () => {
+  const diagnostics = [], nav = new Navigator({onDiagnostic: d => diagnostics.push(d)}); nav.offset = 0;
+  nav.escape(0, 0, 'no displacement');
+  const me = {x: 0, z: 0}, target = {x: 0, z: 100};
+  const initial = nav.plan(me, target, 0);
+  const retry = nav.plan(me, target, 12);
+  assert.ok(initial.facing > 0); assert.ok(retry.facing < 0);
+  assert.equal(diagnostics.at(-1).reason, 'escape produced no displacement');
+});
+test('remember the side of a successful detour for the next obstruction', () => {
+  const nav = new Navigator(); nav.offset = 0; nav.attempts = 1;
+  nav.escape(0, 0, 'no displacement'); nav.plan({x: 0, z: 0}, {x: 0, z: 100}, 0);
+  nav.plan({x: -12, z: 0}, {x: 0, z: 100}, 40);
+  assert.equal(nav.preferredAngle, -Math.PI / 2);
+  nav.attempts = 0; nav.escape(44, 0, 'no displacement');
+  assert.ok(nav.recovery.heading < 0);
+});

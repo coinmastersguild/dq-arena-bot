@@ -15,6 +15,7 @@ export class Navigator {
     this.recovery = null;
     this.attempts = 0;
     this.blocked = false;
+    this.preferredAngle = null;
   }
   pause() { this.moving = false; this.anchor = null; this.probe = null; }
   observe(position, tick) {
@@ -32,8 +33,10 @@ export class Navigator {
       this.onDiagnostic({type: 'navigation-blocked', tick, reason});
       return;
     }
-    const angles = [Math.PI / 2, -Math.PI / 2, Math.PI * 0.75, -Math.PI * 0.75];
-    this.recovery = {heading: heading + angles[this.attempts++], until: tick + this.tickHz * 1.2};
+    const lateral = this.preferredAngle ?? Math.PI / 2;
+    const angles = [lateral, -lateral, lateral * 1.5, -lateral * 1.5];
+    const angle = angles[this.attempts++];
+    this.recovery = {heading: heading + angle, angle, until: tick + this.tickHz * 2};
     this.anchor = null;
     this.onDiagnostic({type: 'navigation-recovery', tick, reason, attempt: this.attempts});
   }
@@ -64,7 +67,15 @@ export class Navigator {
     }
     const heading = Math.atan2(target.x - me.x, target.z - me.z) - this.offset + (retreat ? Math.PI : 0);
     this.observe(me, tick);
+    if (this.recovery && !this.recovery.origin) {
+      this.recovery.origin = {...me}; this.recovery.started = tick;
+    }
+    if (this.recovery && tick - this.recovery.started >= this.tickHz * 0.6 && distance(me, this.recovery.origin) < 0.2) {
+      this.recovery = null; this.anchor = null;
+      this.escape(tick, heading, 'escape produced no displacement');
+    }
     if (this.recovery && tick >= this.recovery.until) {
+      if (this.recovery.origin && distance(me, this.recovery.origin) >= 0.5) this.preferredAngle = Math.sign(this.recovery.angle) * Math.PI / 2;
       this.recovery = null;
       this.anchor = {...me, tick};
     }

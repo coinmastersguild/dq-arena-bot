@@ -1,7 +1,7 @@
 # DQ Arena Bot
 
 An experimental JavaScript toolkit for native DegenQuest Arena bots. Version
-**0.5.0** supplies a frost-mage controller, a session/WebSocket runner, offline
+**0.6.0** supplies a frost-mage controller, a session/WebSocket runner, offline
 regression tests, and versioned recordings. This is an unofficial client,
 not the game server or the separate MAD team-coach API.
 

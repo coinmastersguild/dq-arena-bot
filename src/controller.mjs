@@ -1,7 +1,7 @@
 import {Navigator} from './navigation.mjs';
 import {TargetSelector} from './targeting.mjs';
 
-export const CONTROLLER_VERSION = '0.5.0';
+export const CONTROLLER_VERSION = '0.6.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
