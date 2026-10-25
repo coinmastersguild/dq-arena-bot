@@ -1,6 +1,7 @@
 import {Navigator} from './navigation.mjs';
+import {TargetSelector} from './targeting.mjs';
 
-export const CONTROLLER_VERSION = '0.2.0';
+export const CONTROLLER_VERSION = '0.3.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -14,6 +15,7 @@ export class CombatController {
     this.tickHz = tickHz;
     this.abilities = new Map();
     this.nav = new Navigator({tickHz, onDiagnostic});
+    this.targeting = new TargetSelector({tickHz, onDiagnostic});
     this.seq = 0;
     this.reset();
   }
@@ -26,12 +28,14 @@ export class CombatController {
     this.losUntil = new Map(); this.lastInputMoving = false;
     this.fightStart = null; this.lastEffect = null; this.lastAlert = -Infinity;
     this.nav.reset();
+    this.targeting.reset(); this.lastCoachTarget = null;
   }
   setRules(rules) {
     if (rules.version !== 'native-arena-v1' || rules.tickHz !== 20) throw new Error('Unsupported native rules');
     const kit = rules.specs.find(s => s.id === this.spec);
     if (!kit?.abilities) throw new Error('Missing native spell definitions');
     this.abilities = new Map(kit.abilities.map(a => [a.id, a]));
+    this.targeting.setRules(rules);
   }
   observe(m) {
     if (m.t === 'welcome') {
@@ -80,6 +84,7 @@ export class CombatController {
     this.decide();
   }
   events(events) {
+    this.targeting.events(events, this.chars, this.side);
     const id = this.self.id ?? this.pid;
     for (const e of events) {
       if (id == null) continue;
@@ -133,23 +138,20 @@ export class CombatController {
     const rooted = active.some(a => ['root', 'rooted'].includes(a.kind));
     if (controlled) { this.stopMovement(me.f); return; }
     const enemies = [...this.entities.values()].filter(e => living(e) && this.chars[e.id]?.side && this.chars[e.id].side !== this.side);
-    const targets = enemies.filter(e => !(e.auras || []).some(a => a.kind === 'polymorph' && a.end > this.tick));
-    const score = e => distance(me, e) + 20 * e.hp / Math.max(1, e.mhp) + (this.losUntil.get(e.id) > this.tick ? 80 : 0);
-    targets.sort((a, b) => score(a) - score(b));
-    let target = targets[0];
-    const previous = targets.find(e => e.id === this.targetId);
-    if (previous && target && score(previous) <= score(target) + 8) target = previous;
+    // Finish the current cast before changing the selected damage target.
+    if (me.cast && me.castEnd > this.tick) { this.stopMovement(me.f); return; }
+    const allies = [...this.entities.values()].filter(e => living(e) && this.chars[e.id]?.side === this.side);
+    const target = this.targeting.choose({me, enemies, allies, chars: this.chars, tick: this.tick, losUntil: this.losUntil});
     if (!target) { this.stopMovement(me.f); return; }
     this.select(target.id);
     // Leadership must work while approaching, not only inside personal casting range.
-    if (this.leader && this.tick - this.lastCoach >= this.tickHz * 3) {
-      this.send({t: 'cmd', cmd: 'coach', order: 'focus', pid: null}); this.lastCoach = this.tick;
+    if (this.leader && (this.lastCoachTarget !== target.id || this.tick - this.lastCoach >= this.tickHz * 3)) {
+      this.send({t: 'cmd', cmd: 'coach', order: 'focus', pid: null}); this.lastCoach = this.tick; this.lastCoachTarget = target.id;
     }
     const sinceEffect = this.tick - (this.lastEffect ?? this.fightStart);
     if (sinceEffect >= this.tickHz * 15 && this.tick - this.lastAlert >= this.tickHz * 15) {
       this.diagnostic({type: 'no-combat-effect', tick: this.tick, seconds: sinceEffect / this.tickHz}); this.lastAlert = this.tick;
     }
-    if (me.cast && me.castEnd > this.tick) { this.stopMovement(me.f); return; }
     const range = distance(me, target);
     const near = enemies.some(e => distance(me, e) < 10);
     const facing = this.nav.offset === null ? me.f || 0 : Math.atan2(target.x - me.x, target.z - me.z) - this.nav.offset;

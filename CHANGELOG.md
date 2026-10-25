@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.0 — 2026-10-24
+
+Rematch candidate; live tactical validation pending.
+
+- Role-aware target selection prioritizes accessible healers/casters over tanks.
+- Preserve nearby finishing opportunities and penalize excessive pursuit away from an allied healer.
+- Reassess focus after eight seconds of damage offset by healing with little health progress.
+- Notify allied NPCs immediately when the focus changes; finish active casts before changing targets.
+- Add target-choice diagnostics and six policy regression tests.
+
 ## 0.2.0 — 2026-10-24
 
 Candidate release; offline-tested, live acceptance pending.

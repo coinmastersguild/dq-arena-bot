@@ -4,7 +4,8 @@ Use semantic versions: patches for compatible fixes, minors for strategy/API add
 and majors for incompatible changes after a stable 1.0. Update package.json,
 lockfile, CONTROLLER_VERSION, and CHANGELOG together. `npm run check` checks consistency.
 Tag reviewed versions `vX.Y.Z`; never overwrite tags. Source and server versions
-are separate. v0.1.0 is the live baseline; v0.2.0 is an offline-validated candidate.
+are separate. v0.1.0 is the live baseline; v0.2.0 completed a live match with recovered movement and 32 completed casts;
+v0.3.0 changes focus selection and is awaiting live tactical validation.
 
 ## Before a competitive rematch
 
