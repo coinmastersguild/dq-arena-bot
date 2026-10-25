@@ -23,11 +23,12 @@ test('stationary movement exhausts four attempts, pauses, then retries instead o
 });
 test('movement around a stationary goal without approach progress triggers recovery', () => {
   const diagnostics = [], nav = new Navigator({onDiagnostic: d => diagnostics.push(d)}); nav.offset = 0;
-  for (let tick = 0; tick <= 164; tick += 4) {
+  for (let tick = 0; tick <= 324; tick += 4) {
     const a = tick / 20;
     nav.plan({x: 40 * Math.sin(a), z: 40 * Math.cos(a)}, {id: 9, x: 0, z: 0}, tick);
   }
   assert.ok(diagnostics.some(d => d.reason === 'no approach progress'));
+  assert.deepEqual(diagnostics.filter(d => d.reason === 'no approach progress').map(d => d.attempt), [1, 2]);
 });
 test('pause time and a moving goal do not falsely count as failed approach', () => {
   const diagnostics = [], nav = new Navigator({onDiagnostic: d => diagnostics.push(d)}); nav.offset = 0;

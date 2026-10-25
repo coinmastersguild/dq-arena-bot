@@ -82,8 +82,10 @@ export class Navigator {
     else {
       const range = distance(me, target);
       if (!this.progress || this.progress.id !== target.id || distance(target, this.progress.goal) > 4 ||
-          range < this.progress.best - 2) this.progress = {id: target.id, goal: {...target}, best: range, tick};
+          range < this.progress.best - 2) this.progress = {id: target.id, goal: {...target}, best: range, tick, failures: 0};
       else if (tick - this.progress.tick >= this.tickHz * 8 && !this.recovery) {
+        // Walking in circles must not reset the route-attempt budget merely by moving.
+        this.attempts = Math.max(this.attempts, this.progress.failures++);
         this.escape(tick, heading, 'no approach progress'); this.progress.tick = tick;
       }
     }
