@@ -61,6 +61,20 @@ five minutes. It checks stale sockets, renews the Arena connection lease, recove
 dead-process locks, and preserves review state across restarts. A process supervisor
 is still needed to restart the service process itself after a crash.
 
+For a detached local watchdog that can also adopt an already-running service:
+
+```sh
+npm run daemon -- --config bot.config.json
+```
+
+It runs independently of the launching terminal and restarts a dead service worker,
+checking exclusive process locks before doing so. It preserves the durable stop
+marker, bounds startup logs and records its PID/heartbeat in `watchdog.json`.
+Use either this watchdog or launchd, not both. The watchdog itself is not registered
+for OS reboot; a system supervisor remains preferable on an always-on deployment.
+To stop it completely, first use the bot's `stop` command, then send SIGTERM to the
+PID recorded in `watchdog.json`.
+
 On macOS, generate a credential-free launchd definition:
 
 ```sh

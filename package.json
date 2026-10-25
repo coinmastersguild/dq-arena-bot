@@ -35,7 +35,8 @@
     "replay": "node scripts/replay.mjs",
     "tournament": "node scripts/tournament.mjs",
     "service": "node bin/service.mjs",
-    "service:plist": "node scripts/service-plist.mjs"
+    "service:plist": "node scripts/service-plist.mjs",
+    "daemon": "node bin/watchdog.mjs"
   },
   "dependencies": {
     "ws": "^8.22.0"

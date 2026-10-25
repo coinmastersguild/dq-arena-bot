@@ -64,7 +64,10 @@ export class Autonomy {
     this.busy = true; this.data.review.status = 'running'; this.save();
     try {
       const response = await this.inference.propose({policy: this.data.active.params,
-        rounds: this.data.rounds, reserve: n => this.reserve(n)});
+        rounds: this.data.rounds, reserve: n => {
+          if (this.client.stopping) throw new Error('Runner stopped before inference');
+          this.reserve(n);
+        }});
       // A host-forced new fight/result can supersede this review; never apply a stale proposal.
       if (this.client.stopping || this.data.review.roundId !== roundId || this.client.controller.phase === 'fight' ||
           this.client.controller.phase === 'countdown') throw new Error('Review superseded by combat');
@@ -80,10 +83,11 @@ export class Autonomy {
       }
       this.data.review = {roundId, status: changed ? 'validated' : 'unchanged', model: response.model, usage: response.usage};
     } catch (error) {
+      if (this.client.stopping) return;
       if (this.data.review.roundId === roundId) this.data.review = {roundId, status: 'failed'};
       // Error messages are code-owned: provider bodies and proposals never reach diagnostics.
       this.client.diagnostic({type: 'inference-skipped', message: error.message});
-    } finally { this.busy = false; this.save(); }
+    } finally { this.busy = false; if (!this.client.stopping) this.save(); }
   }
   tick() {
     const c = this.client, now = this.now();

@@ -99,3 +99,17 @@ test('zero completed casts while alive for thirty seconds rolls trial back in th
   assert.equal(h.a.data.review.status, 'rollback'); h.advance(300001); h.a.tick();
   assert.equal(h.a.data.active.id, 'p0000'); assert.equal(h.client.controller.policy.preferredRange, 27);
 });
+test('completion arriving during combat is discarded; shutdown cannot overwrite a successor checkpoint', async t => {
+  for (const action of ['combat', 'shutdown']) {
+    let complete;
+    const h = harness(t, {propose: () => new Promise(resolve => { complete = resolve; })});
+    h.a.result(h.result, 'round'); const pending = h.a.review();
+    if (action === 'combat') h.client.controller.phase = 'fight';
+    else h.client.stopping = true;
+    complete({proposal: {changes: {preferredRange: 26}, rationale: 'test'}, model: 'glm-test', usage: {}});
+    await pending;
+    assert.equal(h.a.data.pending, undefined);
+    const saved = JSON.parse(fs.readFileSync(h.a.file));
+    assert.equal(saved.review.status, action === 'combat' ? 'failed' : 'running');
+  }
+});
