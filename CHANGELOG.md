@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.9.0 — 2026-10-25
+
+- Retreat from nearby threats independently of the selected damage target, including
+  defensive movement during dangerous or repeatedly delayed casts.
+- Replace permanent navigation blocking with bounded pause/retry cycles and detect
+  movement that fails to approach a stationary goal.
+- Reduce last-survivor LOS backoff and test immediate retargeting after focus death.
+- Add a retrospective and separate server-side NPC pursuit handoff with recorded evidence.
+
 ## 0.8.0
 
 - Opt-in continuous service with reconnect backoff, socket watchdog, durable pause/stop,

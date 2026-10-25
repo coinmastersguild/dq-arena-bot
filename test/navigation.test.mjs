@@ -8,15 +8,33 @@ test('calibration uses measured displacement and stops the probe', () => {
   assert.equal(nav.plan({x: 0, z: 1}, target, 6).forward, 0);
   assert.equal(nav.offset, 0);
 });
-test('acknowledged but stationary movement causes bounded alternate headings then stops', () => {
+test('stationary movement exhausts four attempts, pauses, then retries instead of abandoning the match', () => {
   const diagnostics = [], nav = new Navigator({onDiagnostic: d => diagnostics.push(d)}); nav.offset = 0;
   const me = {x: 4561.7, z: -947.61, f: -1.6}, target = {x: 4500, z: -950};
   const headings = [];
-  for (let tick = 0; tick <= 400; tick += 4) headings.push(nav.plan(me, target, tick));
+  for (let tick = 0; tick <= 400 && !nav.blocked; tick += 4) headings.push(nav.plan(me, target, tick));
   assert.equal(diagnostics.filter(d => d.type === 'navigation-recovery').length, 4);
   assert.equal(nav.blocked, true);
   assert.equal(headings.at(-1).forward, 0);
   assert.ok(new Set(headings.map(h => h.facing)).size >= 4);
+  assert.equal(nav.plan(me, target, nav.blockedUntil - 1).forward, 0);
+  assert.equal(nav.plan(me, target, nav.blockedUntil).forward, 1);
+  assert.ok(diagnostics.some(d => d.type === 'navigation-retry'));
+});
+test('movement around a stationary goal without approach progress triggers recovery', () => {
+  const diagnostics = [], nav = new Navigator({onDiagnostic: d => diagnostics.push(d)}); nav.offset = 0;
+  for (let tick = 0; tick <= 164; tick += 4) {
+    const a = tick / 20;
+    nav.plan({x: 40 * Math.sin(a), z: 40 * Math.cos(a)}, {id: 9, x: 0, z: 0}, tick);
+  }
+  assert.ok(diagnostics.some(d => d.reason === 'no approach progress'));
+});
+test('pause time and a moving goal do not falsely count as failed approach', () => {
+  const diagnostics = [], nav = new Navigator({onDiagnostic: d => diagnostics.push(d)}); nav.offset = 0;
+  nav.plan({x: 0, z: 0}, {id: 9, x: 0, z: 40}, 0); nav.pause();
+  nav.plan({x: 0, z: 0}, {id: 9, x: 0, z: 40}, 1000);
+  for(let tick = 1004; tick <= 1204; tick += 4) nav.plan({x: 0, z: (tick - 1000) / 4}, {id: 9, x: 0, z: 40 + (tick - 1000) / 4}, tick);
+  assert.ok(!diagnostics.some(d => d.reason === 'no approach progress'));
 });
 test('continuous displacement does not trigger false stalls', () => {
   const nav = new Navigator(); nav.offset = 0;

@@ -1,7 +1,7 @@
 # DQ Arena Bot
 
 An experimental JavaScript toolkit for native DegenQuest Arena bots. Version
-**0.8.0** supplies a frost-mage controller, a session/WebSocket runner, offline
+**0.9.0** supplies a frost-mage controller, a session/WebSocket runner, offline
 regression tests, and versioned recordings. This is an unofficial client,
 not the game server or the separate MAD team-coach API.
 
@@ -51,16 +51,21 @@ uses separate code/policy versions, and continues with the current policy if inf
 - Role-aware focus: prefer reachable healers/casters, finish low-health targets,
   and reassess damage repeatedly offset by healing. Avoid Polymorphed targets.
 - Leader focus orders independent of personal casting range.
-- Displacement calibration, stall detection, four bounded escape directions,
-  then a blocked diagnostic and stop.
+- Displacement calibration, stalled approach detection, four bounded escape directions,
+  then a five-second pause and a changed-direction retry.
 - Repositioning after actor-scoped line-of-sight errors.
 - Frostbolt, situational Fire Blast, Frost Nova, and Ice Barrier gated by learned
   spells, mana, cooldown, GCD, and observed casting.
 - No-effect diagnostics; sent commands are not counted as successful spells.
+- Threat-based retreat independent of the damage target, including survival movement
+  during dangerous casting waits.
 
-Navigation is reactive, not map-aware pathfinding. Four failed escapes require
-intervention or a new match. Blink navigation, Polymorph execution, healer-protection
+Navigation is reactive, not map-aware pathfinding. Retries cannot guarantee a route
+through unknown geometry. Blink navigation, Polymorph execution, healer-protection
 tactics, and additional classes remain future work.
+
+See the [v0.8.0 review](docs/RETROSPECTIVE-0.8.0.md) for the survival failure that
+motivated these changes and the separate, unresolved server-owned NPC pursuit stall.
 
 ## Develop and compare
 

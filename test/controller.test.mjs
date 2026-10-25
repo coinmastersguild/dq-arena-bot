@@ -99,12 +99,56 @@ test('LOS retry requires both backoff expiry and meaningful repositioning', () =
   assert.equal(bot.losUntil.has(2), false);
 });
 test('repeated LOS failures increase backoff and confirmed damage clears it', () => {
-  const {bot, snap} = harness();bot.observe(snap(201));
-  bot.observe(snap(205, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
-  bot.observe(snap(225, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  const {bot, snap} = harness();
+  const full = (tick, extra={}) => {
+    const m=snap(tick, extra);m.ents.push({id:3,x:0,z:100,hp:400,mhp:400},{id:4,x:0,z:100,hp:400,mhp:400});
+    m.chars[3]={side:'coinfall'};m.chars[4]={side:'coinfall'};return m;
+  };
+  bot.observe(full(201));
+  bot.observe(full(205, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
+  bot.observe(full(225, {evs: [{type: 'error', pid: 1, text: 'Line of sight.'}]}));
   assert.equal(bot.losUntil.get(2), 545);
   bot.observe(snap(229, {evs: [{type: 'damage', sourceId: 1, targetId: 2, amount: 70}]}));
   assert.equal(bot.losUntil.has(2), false); assert.equal(bot.losFailures.has(2), false);
+});
+test('last-survivor LOS backoff is bounded at eight seconds', () => {
+  const {bot,snap}=harness();bot.observe(snap(201));
+  for(const tick of [205,225,245])bot.observe(snap(tick,{evs:[{type:'error',pid:1,text:'Line of sight.'}]}));
+  assert.equal(bot.losUntil.get(2),405);
+});
+test('retreat from a nearby attacker while preserving a farther healer as damage target', () => {
+  const {bot,sent,snap}=harness();bot.nav.offset=0;
+  bot.targeting.roles.set('priest','healer');bot.targeting.roles.set('tank','bossTank');
+  const m=snap(201);m.self.known=['frostbolt'];m.chars[2].spec='priest';
+  m.ents.push({id:3,x:4,z:0,hp:1000,mhp:1000,tgt:1});m.chars[3]={side:'coinfall',spec:'tank'};
+  bot.observe(m);
+  assert.equal(bot.targetId,2);
+  const move=sent.find(m=>m.mi?.b===1);
+  assert.ok(move);assert.ok(Math.abs(move.facing-Math.PI/2)<.01);
+  assert.ok(!sent.some(m=>m.cmd==='cast'&&m.ability==='frostbolt'));
+});
+test('cast pushback cannot trap a pressured low-health mage in the casting wait', () => {
+  const {bot,sent,snap,diagnostics}=harness();bot.nav.offset=0;
+  const m=snap(201);m.ents[0].hp=120;m.ents[0].cast='frostbolt';m.ents[0].castEnd=500;
+  m.ents[1].tgt=1;bot.observe(m);
+  assert.ok(sent.some(m=>m.mi?.b===1));
+  assert.ok(diagnostics.some(d=>d.type==='defensive-cast-break'));
+  assert.ok(!sent.some(m=>m.cmd==='cast'));
+});
+test('finish a safe cast, and never try to move out of a root while casting', () => {
+  for(const rooted of [false,true]){
+    const {bot,sent,snap}=harness();bot.nav.offset=0;const m=snap(201);
+    Object.assign(m.ents[0],{cast:'frostbolt',castEnd:240});
+    if(rooted){m.ents[1].z=5;m.ents[0].auras=[{kind:'root',end:500}];}
+    bot.observe(m);assert.ok(!sent.some(m=>m.mi?.f||m.mi?.b));assert.ok(!sent.some(m=>m.cmd==='cast'));
+  }
+});
+test('when the focused enemy dies, immediately approach and coach focus on the last survivor', () => {
+  const {bot,sent,snap}=harness();bot.nav.offset=0;bot.leader=true;bot.observe(snap(201));sent.length=0;
+  const m=snap(249);m.ents[1].dead=1;m.ents[1].hp=0;
+  m.ents.push({id:3,x:0,z:80,hp:120,mhp:400});m.chars[3]={side:'coinfall'};
+  bot.observe(m);assert.equal(bot.targetId,3);
+  assert.ok(sent.some(m=>m.cmd==='coach'&&m.order==='focus'));assert.ok(sent.some(m=>m.mi?.f===1));
 });
 test('after LOS reposition, hold safe casting range until backoff expires', () => {
   const {bot, sent, snap} = harness(); bot.nav.offset = 0; bot.observe(snap(201));

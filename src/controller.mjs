@@ -2,7 +2,7 @@ import {Navigator} from './navigation.mjs';
 import {TargetSelector} from './targeting.mjs';
 import {DEFAULT_POLICY, validatePolicy} from './policy.mjs';
 
-export const CONTROLLER_VERSION = '0.8.0';
+export const CONTROLLER_VERSION = '0.9.0';
 const living = e => e && !e.dead && e.hp > 0;
 const distance = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
 
@@ -35,6 +35,7 @@ export class CombatController {
     this.fightStart = null; this.lastEffect = null; this.lastAlert = -Infinity;
     this.nav.reset();
     this.targeting.reset(); this.lastCoachTarget = null;
+    this.retreating = false; this.castObserved = null; this.lastDefensiveBreak = -Infinity;
   }
   setRules(rules) {
     if (rules.version !== 'native-arena-v1' || rules.tickHz !== 20) throw new Error('Unsupported native rules');
@@ -106,11 +107,13 @@ export class CombatController {
           const targetId = this.pendingCast?.target ?? this.targetId;
           const count = (this.losFailures.get(targetId)?.count || 0) + 1;
           const me = this.entities.get(id), target = this.entities.get(targetId);
-          const until = this.tick + this.tickHz * Math.min(24, this.policy.losBackoffSeconds * count);
+          const enemies = [...this.entities.values()].filter(e => living(e) && this.chars[e.id]?.side && this.chars[e.id].side !== this.side);
+          const seconds = Math.min(enemies.length > 0 && enemies.length <= 2 ? 8 : 24, this.policy.losBackoffSeconds * count);
+          const until = this.tick + this.tickHz * seconds;
           this.losFailures.set(targetId, {count, until, origin: me && {x: me.x, z: me.z},
             targetOrigin: target && {x: target.x, z: target.z}});
           this.losUntil.set(targetId, until);
-          this.diagnostic({type: 'los-backoff', tick: this.tick, targetId, seconds: Math.min(24, this.policy.losBackoffSeconds * count)});
+          this.diagnostic({type: 'los-backoff', tick: this.tick, targetId, seconds});
           this.nav.escape(this.tick, this.entities.get(id)?.f || 0, 'line-of-sight');
         }
         this.pendingCast = null;
@@ -119,6 +122,8 @@ export class CombatController {
         this.lastEffect = this.tick;
         if (e.type !== 'castStart') this.pendingCast = null;
       }
+      if (e.type === 'castStart') this.castObserved = {id: e.ability, since: this.tick};
+      if (e.type === 'castStop') this.castObserved = null;
       if (e.type === 'damage' && e.sourceId === id && e.targetId != null) {
         this.losFailures.delete(e.targetId); this.losUntil.delete(e.targetId);
       }
@@ -150,6 +155,17 @@ export class CombatController {
     this.pendingCast = {id, target, until: this.tick + this.tickHz * Math.max(1, a.castTime || 0)};
     return true;
   }
+  move(me, waypoint, {retreat = false, target, los = false, casting = false} = {}) {
+    const step = this.nav.plan(me, waypoint, this.tick, {retreat});
+    const backpedal = step.forward && retreat && !this.nav.recovery && this.nav.offset !== null;
+    const facing = backpedal ? step.facing - Math.PI : step.facing;
+    this.input(facing, backpedal ? 0 : step.forward, backpedal ? 1 : 0);
+    if (casting || !target) return;
+    const instant = this.abilities.get('fire_blast');
+    const targetFacing = this.nav.offset === null ? me.f || 0 : Math.atan2(target.x - me.x, target.z - me.z) - this.nav.offset;
+    if (step.forward && Math.cos(facing - targetFacing) > 0.9 && !los && instant?.castTime === 0 &&
+        distance(me, target) <= instant.range) this.cast('fire_blast', target.id);
+  }
   decide() {
     const me = this.entities.get(this.self.id ?? this.pid);
     if (!living(me)) { this.stopMovement(); return; }
@@ -166,8 +182,28 @@ export class CombatController {
     const rooted = active.some(a => ['root', 'rooted'].includes(a.kind));
     if (controlled) { this.stopMovement(me.f); return; }
     const enemies = [...this.entities.values()].filter(e => living(e) && this.chars[e.id]?.side && this.chars[e.id].side !== this.side);
-    // Finish the current cast before changing the selected damage target.
-    if (me.cast && me.castEnd > this.tick) { this.stopMovement(me.f); return; }
+    const nearest = enemies.reduce((best, e) => !best || distance(me, e) < distance(me, best) ? e : best, null);
+    const attackers = enemies.filter(e => e.tgt === me.id);
+    const casting = !!(me.cast && me.castEnd > this.tick);
+    if (casting && this.castObserved?.id !== me.cast) this.castObserved = {id: me.cast, since: this.tick};
+    if (!casting) this.castObserved = null;
+    const overdue = casting && this.tick - this.castObserved.since > this.tickHz * ((this.abilities.get(me.cast)?.castTime || 3) + 2);
+    const closestAttacker = attackers.reduce((best, e) => !best || distance(me, e) < distance(me, best) ? e : best, null);
+    const pressured = closestAttacker && distance(me, closestAttacker) < 30 && (me.hp < me.mhp * 0.55 || overdue);
+    if (nearest && distance(me, nearest) < this.policy.retreatRange) this.retreating = true;
+    else if (!nearest || distance(me, nearest) >= this.policy.retreatRange + 4) this.retreating = false;
+    const threat = this.retreating ? nearest : pressured ? closestAttacker : null;
+    // Incoming pushback can extend castEnd indefinitely. Survival movement must precede the cast wait.
+    if (casting) {
+      if (threat && !rooted) {
+        if (this.tick - this.lastDefensiveBreak >= this.tickHz * 3) {
+          this.diagnostic({type: 'defensive-cast-break', tick: this.tick, threatId: threat.id, overdue: !!overdue});
+          this.lastDefensiveBreak = this.tick;
+        }
+        this.move(me, threat, {retreat: true, casting: true});
+      } else this.stopMovement(me.f);
+      return;
+    }
     const allies = [...this.entities.values()].filter(e => living(e) && this.chars[e.id]?.side === this.side);
     const target = this.targeting.choose({me, enemies, allies, chars: this.chars, tick: this.tick, losUntil: this.losUntil});
     if (!target) { this.stopMovement(me.f); return; }
@@ -188,6 +224,9 @@ export class CombatController {
     }
     if (near && this.cast('frost_nova')) { this.stopMovement(me.f); return; }
     const los = this.losUntil.get(target.id) > this.tick;
+    if (threat && !rooted) {
+      this.move(me, threat, {retreat: true, target, los}); return;
+    }
     const failed = this.losFailures.get(target.id);
     const repositioned = failed && ((failed.origin && distance(me, failed.origin) >= 4) ||
       (failed.targetOrigin && distance(target, failed.targetOrigin) >= 6));
@@ -197,14 +236,7 @@ export class CombatController {
       this.stopMovement(facing); return;
     }
     if (!rooted && (range > this.policy.preferredRange || range < this.policy.retreatRange || los || this.nav.recovery)) {
-      const step = this.nav.plan(me, target, this.tick, {retreat: range < this.policy.retreatRange, lineOfSight: los});
-      const backpedal = step.forward && range < this.policy.retreatRange && !this.nav.recovery && this.nav.offset !== null;
-      const movementFacing = backpedal ? step.facing - Math.PI : step.facing;
-      this.input(movementFacing, backpedal ? 0 : step.forward, backpedal ? 1 : 0);
-      // Instant damage can use movement time; never attempt a timed cast here.
-      const instant = this.abilities.get('fire_blast');
-      const facingTarget = Math.cos(movementFacing - facing) > 0.9;
-      if (step.forward && facingTarget && !los && instant?.castTime === 0 && range <= instant.range) this.cast('fire_blast', target.id);
+      this.move(me, target, {retreat: range < this.policy.retreatRange, target, los});
       return;
     }
     this.stopMovement(facing);
